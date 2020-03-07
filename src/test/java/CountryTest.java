@@ -6,25 +6,20 @@ import io.restassured.http.ContentType;
 
 import org.bson.Document;
 import org.bson.types.ObjectId;
+import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 
+import static com.mongodb.client.model.Filters.and;
+import static com.mongodb.client.model.Filters.eq;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 
+
 public class CountryTest extends BaseTest {
-    private String apiPath = "/school-service/api/bank-accounts";
-    private MongoDatabase database;
 
-    @BeforeClass
-    public void init() {
-        MongoClient mongoClient = MongoClients.create("mongodb://techno:ee4CvCRPhor5@185.97.114.201:27118/?authSource=cloud-school");
-        database = mongoClient.getDatabase("cloud-school");
-        MongoCollection<Document> schoolCountry = database.getCollection("school_country");
-    }
-
-
+    private MongoCollection<Document> schoolCountry;
 
     @Test
     public void getBasePath() {
@@ -51,18 +46,21 @@ public class CountryTest extends BaseTest {
         ;
     }
 
-    // TODO: initialize database get reference to collection
-
-
-  long initialCount=schoolCountry.countDocuments
-
+    // initialize database get reference to collection
+    @BeforeClass
+    public void initMongoDb(){
+        MongoClient mongoClient = MongoClients.create("mongodb://techno:ee4CvCRPhor5@185.97.114.201:27118/?authSource=cloud-school");
+        MongoDatabase database = mongoClient.getDatabase( "cloud-school" );
+        schoolCountry = database.getCollection( "school_country" );
+    }
 
     @Test
     public void createCountry() {
         Country country = new Country();
         country.setName( name );
         country.setCode( code );
-        // TODO: get the initial count
+        // get the initial count
+        long initalCount = schoolCountry.countDocuments( eq( "deleted", false ) );
         // creating country
         String countryId = given()
                 .cookies( cookies )
@@ -75,8 +73,14 @@ public class CountryTest extends BaseTest {
                 .log().body()
                 .statusCode( 201 )
                 .extract().jsonPath().getString( "id" );
-        // TODO: verify that initial count increased
-        // TODO: verify that entity created with correct fields
+        // verify that initial count increased
+        long afterCreationCount = schoolCountry.countDocuments( eq( "deleted", false ) );
+        Assert.assertEquals( afterCreationCount, initalCount + 1 );
+        // verify that entity created with correct fields
+        Document entity = schoolCountry.find( eq( "_id", new ObjectId( countryId ) ) ).first();
+        Assert.assertNotNull( entity );
+        Assert.assertEquals( entity.get( "name" ), country.getName() );
+        Assert.assertEquals( entity.get( "code" ), country.getCode() );
 
         // deleting country
         given()
@@ -89,8 +93,17 @@ public class CountryTest extends BaseTest {
                 .statusCode( 200 )
         ;
 
-        // TODO: verify that count decreased
-        // TODO: verify that entity deleted, cannot be found
+        // verify that count decreased
+        long afterDeletionCount = schoolCountry.countDocuments( eq( "deleted", false ) );
+        Assert.assertEquals( afterDeletionCount, afterCreationCount - 1 );
+        // verify that entity deleted, cannot be found
+        Document entityAfterDeletion = schoolCountry.find(
+                and(
+                        eq( "_id", new ObjectId( countryId ) ),
+                        eq( "deleted", false )
+                )
+        ).first();
+        Assert.assertNull( entityAfterDeletion );
     }
 
     @Test
